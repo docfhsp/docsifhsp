@@ -1,0 +1,15 @@
+gradio
+fastapi
+uvicorn
+requests
+pydantic
+cachetools
+upstash_redis==1.2.0
+markitdown
+openai
+pyquery
+tiktoken
+scuid
+python-magic
+plotly
+matplotlib

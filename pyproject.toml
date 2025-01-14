@@ -1,0 +1,17 @@
+[tool.poetry]
+name = "docsifer"
+version = "1.0.0"
+description = "Docsifer is a powerful tool for converting various data formats into Markdown for applications such as indexing, text analysis, and more. It supports PDF, PowerPoint, Word, Excel, Images, Audio, HTML, and other text-based formats, and leverages Large Language Models (LLMs) to enhance performance."
+authors = ["Hieu Lam <lamhieu.vk@gmail.com>"]
+readme = "README.md"
+homepage = "https://github.com/lh0x00/docsifer"
+repository = "https://github.com/lh0x00/docsifer"
+license = "MIT"
+
+[tool.poetry.dependencies]
+python = "^3.10"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
