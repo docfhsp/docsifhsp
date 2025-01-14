@@ -47,35 +47,13 @@ cd docsifer
 ```
 
 ### 2. Build and Run with Docker
-
 Make sure Docker is installed and running on your machine.
-
 ```bash
-docker build -t docsifer .
-docker run -p 7860:7860 docsifer
+docker build -t lightweight-embeddings .
+docker run -p 7860:7860 lightweight-embeddings
 ```
 
 The API will now be accessible at `http://localhost:7860`.
-
-### 3. Environment Variables
-
-Set the following environment variables as needed:
-
-- `OPENAI_API_KEY`: Your OpenAI API key (optional, for LLM-enhanced features).
-- `OPENAI_BASE_URL`: Custom base endpoint for OpenAI-compatible services (optional).
-- `REDIS_URL`: Upstash Redis URL (default: `redis://localhost:6379/0`).
-- `REDIS_TOKEN`: Upstash Redis token (default: `***`).
-
-You can set these in a `.env` file or pass them directly when running the Docker container:
-
-```bash
-docker run -p 7860:7860 \
-  -e OPENAI_API_KEY=sk-xxxxx \
-  -e OPENAI_BASE_URL=https://api.openai.com/v1 \
-  -e REDIS_URL=redis://your-upstash-url \
-  -e REDIS_TOKEN=your-upstash-token \
-  docsifer
-```
 
 ## 📖 API Overview
 
@@ -119,7 +97,7 @@ docker run -p 7860:7860 \
 
 ## 👥 Contributors
 
-- **lamhieu / lh0x00** – Creator and Maintainer ([GitHub](https://github.com/lh0x00))
+- **lamhieu / lh0x00** – Creator and Maintainer ([GitHub](https://github.com/lh0x00), [HuggingFace](https://huggingface.co/lamhieu))
 
 Contributions are welcome! Check out the [contribution guidelines](https://github.com/lh0x00/docsifer/blob/main/CONTRIBUTING.md).
 
