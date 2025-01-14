@@ -66,8 +66,11 @@ class DocsiferService:
         try:
             content = html_file.read_text(encoding="utf-8", errors="ignore")
             d = pq(content)
-            # Remove hidden elements
+            # Remove hidden elements and styles
+            d(":hidden").remove()
+            d("[style='display:none']").remove()
             d('*[style*="display:none"]').remove()
+            d("style").remove()
             cleaned_html = str(d)
             cleaned_html = cleaned_html.strip()
             html_file.write_text(cleaned_html, encoding="utf-8")
