@@ -306,8 +306,8 @@ def create_main_interface():
                         curl -X POST \\
                             "https://lamhieu-docsifer.hf.space/v1/convert" \\
                             -F "file=@/path/to/local/document.pdf" \\
-                            -F "openai={{\\"api_key\\":\\"sk-xxxxx\\",\\"model\\":\\"gpt-4o-mini\\",\\"base_url\\":\\"https://api.openai.com/v1\\"}}" \\
-                            -F "settings={{\\"cleanup\\":true}}"
+                            -F "openai={\\"api_key\\":\\"sk-xxxxx\\",\\"model\\":\\"gpt-4o-mini\\",\\"base_url\\":\\"https://api.openai.com/v1\\"}" \\
+                            -F "settings={\\"cleanup\\":true}"
                         ```
                         """
                     )
