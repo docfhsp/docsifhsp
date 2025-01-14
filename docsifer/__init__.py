@@ -17,8 +17,12 @@ from pathlib import Path
 from scuid import scuid
 
 
-# Filter out /v1 requests from the access log
 class LogFilter(logging.Filter):
+    """
+    A custom logging filter that only keeps log records containing '/v1'
+    in the request path. This helps to filter out other logs and reduce noise.
+    """
+
     def filter(self, record):
         # Only keep log records that contain "/v1" in the request path
         if record.args and len(record.args) >= 3:
@@ -30,7 +34,6 @@ class LogFilter(logging.Filter):
 logger = logging.getLogger("uvicorn.access")
 logger.addFilter(LogFilter())
 
-# Application metadata
 __version__ = "1.0.0"
 __author__ = "lamhieu"
 __description__ = "Docsifer: Efficient Data Conversion to Markdown."
@@ -46,11 +49,10 @@ __metadata__ = {
     "spaces": "https://huggingface.co/spaces/lh0x00/docsifer",
 }
 
-# Update your Docsifer API endpoints (you can replace with your HF Space or other URL)
+# Docsifer API Endpoints (can be replaced with your live URLs if desired)
 DOCSIFER_API_URL = "http://localhost:7860/v1/convert"
 DOCSIFER_STATS_URL = "http://localhost:7860/v1/stats"
 
-# Markdown description for the main interface
 APP_DESCRIPTION = f"""
 # 📝 **Docsifer: Convert Your Documents to Markdown**
 
@@ -60,7 +62,7 @@ Welcome to **Docsifer**, a specialized service that converts your files—like P
 
 - **Open Source**: The entire Docsifer codebase is publicly available for review and contribution.
 - **Efficient & Flexible**: Supports multiple file formats, ensuring quick and accurate Markdown conversion.
-- **Privacy-Focused**: We never store user data; all processing is ephemeral. We only collect minimal anonymous usage stats for service improvement.
+- **Privacy-Focused**: We never store user data; all processing is temporary. We only collect minimal anonymous usage statistics to count the number of calls and the number of tokens, nothing else.
 - **Production-Ready**: Easy Docker deployment, interactive Gradio playground, and comprehensive REST API documentation.
 - **Community & Collaboration**: Contribute on [GitHub]({__metadata__["github"]}) or try it out on [Hugging Face Spaces]({__metadata__["spaces"]}).
 
@@ -68,7 +70,6 @@ Welcome to **Docsifer**, a specialized service that converts your files—like P
 - [Documentation]({__metadata__["docs"]}) | [GitHub]({__metadata__["github"]}) | [Live Demo]({__metadata__["spaces"]})
 """
 
-# Initialize FastAPI application
 app = FastAPI(
     title="Docsifer Service API",
     description=__description__,
@@ -77,7 +78,7 @@ app = FastAPI(
     redoc_url="/redoc",
 )
 
-# Configure CORS
+# Configure CORS (Cross-Origin Resource Sharing)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  # Adjust if needed for specific domains
@@ -86,34 +87,40 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Import and include your existing router (which has /v1/convert, /v1/stats, etc.)
+# Import and include your existing router (with /v1 endpoints)
 from .router import router
 
 app.include_router(router, prefix="/v1")
 
 
 def call_convert_api(
-    file_obj: bytes,
-    filename: str,
+    file_obj: Optional[bytes],
+    filename: str = "",
+    url: Optional[str] = None,
     cleanup: bool = True,
     openai_base_url: Optional[str] = None,
     openai_api_key: Optional[str] = None,
     openai_model: Optional[str] = None,
 ) -> Tuple[str, str]:
     """
-    Calls the /v1/convert endpoint, returning (markdown_content, md_file_path).
-    If there's an error, the first return value is an error message (str),
-    the second is an empty string.
+    Call the /v1/convert endpoint, returning (markdown_content, md_file_path).
+    - If there's an error, the first return value is an error message (str),
+      the second is an empty string.
 
-    The updated /v1/convert expects:
-      - file (UploadFile)
-      - openai (object, e.g. {"api_key":"...","base_url":"..."})
-      - settings (object, e.g. {"cleanup": true})
+    Args:
+        file_obj (Optional[bytes]): The raw file bytes to be sent. If None, 'url' is used.
+        filename (str): Name of the file (will be posted to the endpoint).
+        url (str, optional): URL to be converted (used only if file_obj is None).
+        cleanup (bool): Whether to enable cleanup mode for HTML files.
+        openai_base_url (str, optional): Base URL for OpenAI or compatible LLM.
+        openai_api_key (str, optional): API key for the LLM.
+        openai_model (str, optional): Model name to use for LLM-based extraction.
+
+    Returns:
+        (str, str):
+            - markdown_content (str): The conversion result in Markdown form or an error message.
+            - tmp_md_path (str): The path to the temporary .md file for download.
     """
-
-    if file_obj is None:
-        return ("❌ No file was uploaded.", "")
-
     # Build the "openai" object
     openai_dict = {}
     if openai_api_key and openai_api_key.strip():
@@ -127,17 +134,27 @@ def call_convert_api(
     settings_dict = {"cleanup": cleanup}
 
     data = {
-        # These must match the `Form(...)` fields named "openai" and "settings"
+        # Must match the `Form(...)` fields named "openai" and "settings"
         "openai": json.dumps(openai_dict),
         "settings": json.dumps(settings_dict),
     }
 
+    # If the user left the OpenAI fields blank, remove the `openai` key from data
     if len(openai_dict) <= 3:
         data.pop("openai")
 
-    # Prepare files for multipart/form-data
-    files = {"file": (filename, file_obj)}
+    # Decide if we're sending a file or a URL
+    files = {}
+    if file_obj:
+        # If file is provided, it takes priority
+        files = {"file": (filename, file_obj)}
+        data["url"] = ""  # ensure 'url' is empty on the form
+    elif url and url.strip():
+        data["url"] = url.strip()
+    else:
+        return ("❌ Please upload a file or provide a URL.", "")
 
+    # Perform the POST request
     try:
         response = requests.post(DOCSIFER_API_URL, files=files, data=data, timeout=30)
     except requests.exceptions.RequestException as e:
@@ -146,14 +163,15 @@ def call_convert_api(
     if response.status_code != 200:
         return (f"❌ API Error {response.status_code}: {response.text}", "")
 
+    # Parse the API response
     try:
         converted = response.json()
-        # Expecting { "filename": "...", "markdown": "..." }
+        # Expected structure: { "filename": "...", "markdown": "..." }
         markdown_content = converted["markdown"]
     except Exception as e:
         return (f"❌ Error parsing JSON: {str(e)}", "")
 
-    # Write the returned Markdown to a temporary .md file so Gradio can serve it
+    # Write the returned Markdown to a temp .md file
     with tempfile.NamedTemporaryFile(
         mode="w+", suffix=".md", dir="/tmp", delete=False
     ) as tmp_file:
@@ -165,8 +183,17 @@ def call_convert_api(
 
 def call_stats_api_df() -> Tuple[pd.DataFrame, pd.DataFrame]:
     """
-    Calls /v1/stats endpoint to retrieve analytics data.
-    Returns two DataFrames: (access_df, tokens_df).
+    Call /v1/stats endpoint to retrieve analytics data and return two DataFrames:
+    - access_df: Access statistics
+    - tokens_df: Token usage statistics
+
+    Raises:
+        ValueError: If the stats endpoint fails or returns invalid data.
+
+    Returns:
+        Tuple[pd.DataFrame, pd.DataFrame]:
+            (access_df, tokens_df) with columns ["Model", "Total", "Daily",
+            "Weekly", "Monthly", "Yearly"].
     """
     try:
         response = requests.get(DOCSIFER_STATS_URL, timeout=10)
@@ -186,8 +213,10 @@ def call_stats_api_df() -> Tuple[pd.DataFrame, pd.DataFrame]:
     tokens_data = data.get("tokens", {})
 
     def build_stats_df(bucket: dict) -> pd.DataFrame:
-        # We want columns for periods: total, daily, weekly, monthly, yearly
-        # Each row => "docsifer" (just 1 row if everything is aggregated)
+        """
+        Helper function to transform a nested dictionary (by period, by model)
+        into a tabular pandas DataFrame.
+        """
         all_models = set()
         for period_key in ["total", "daily", "weekly", "monthly", "yearly"]:
             period_dict = bucket.get(period_key, {})
@@ -219,21 +248,31 @@ def call_stats_api_df() -> Tuple[pd.DataFrame, pd.DataFrame]:
 
 def create_main_interface():
     """
-    Creates a Gradio Blocks interface:
-    - A 'Conversion Playground' tab for uploading a file and converting to Markdown
-    - An 'Analytics Stats' section to display usage statistics
-    - cURL examples for reference
+    Create a Gradio Blocks interface that includes:
+      1) 'Conversion Playground' Tab:
+         - File upload OR URL-based conversion
+         - Optional OpenAI configuration
+         - Convert button
+         - Display of conversion result as Markdown
+         - Downloadable .md file
+      2) 'Analytics Stats' Tab:
+         - Button to fetch usage statistics
+         - DataFrames for Access Stats and Token Stats
+
+    Returns:
+        Gradio Blocks instance that can be mounted into the FastAPI app.
     """
     with gr.Blocks(title="Docsifer: Convert to Markdown", theme="default") as demo:
         gr.Markdown(APP_DESCRIPTION)
 
         with gr.Tab("Conversion Playground"):
-            gr.Markdown("### Convert your files to Markdown with Docsifer.")
+            gr.Markdown("### Convert your files or a URL to Markdown with Docsifer.")
 
             with gr.Row():
+                # Left Column: File Upload, URL Input, Settings, Button
                 with gr.Column():
                     file_input = gr.File(
-                        label="Upload File",
+                        label="Upload File (optional)",
                         file_types=[
                             ".pdf",
                             ".docx",
@@ -249,6 +288,11 @@ def create_main_interface():
                             ".zip",
                         ],
                         type="binary",
+                    )
+
+                    url_input = gr.Textbox(
+                        label="URL (optional)",
+                        placeholder="Enter a URL if no file is uploaded",
                     )
 
                     with gr.Accordion("OpenAI Configuration (Optional)", open=False):
@@ -275,7 +319,8 @@ def create_main_interface():
 
                     with gr.Accordion("Conversion Settings", open=True):
                         gr.Markdown(
-                            "Enable to remove <style> tags or hidden elements from `.html` files before conversion."
+                            "Enable to remove <style> tags or hidden elements "
+                            "from `.html` files before conversion."
                         )
                         cleanup_toggle = gr.Checkbox(
                             label="Enable Cleanup",
@@ -284,13 +329,12 @@ def create_main_interface():
 
                     convert_btn = gr.Button("Convert")
 
+                # Right Column: Conversion Result Display & Download
                 with gr.Column():
-                    output_md = gr.Textbox(
-                        label="Conversion Result (Markdown)",
-                        lines=20,
-                        interactive=False,
-                    )
-                    # Set visible=True so the user always sees a small download button
+                    # Display the result as Markdown
+                    output_md = gr.Markdown(label="Conversion Result (Markdown)")
+
+                    # The user can still download the .md file
                     download_file = gr.File(
                         label="Download",
                         interactive=False,
@@ -309,32 +353,64 @@ def create_main_interface():
                             -F "openai={\\"api_key\\":\\"sk-xxxxx\\",\\"model\\":\\"gpt-4o-mini\\",\\"base_url\\":\\"https://api.openai.com/v1\\"}" \\
                             -F "settings={\\"cleanup\\":true}"
                         ```
+
+                        **Convert from a URL (no file)**:
+                        ```bash
+                        curl -X POST \\
+                            "https://lamhieu-docsifer.hf.space/v1/convert" \\
+                            -F "url=https://example.com/page.html" \\
+                            -F "openai={\\"api_key\\":\\"sk-xxxxx\\",\\"model\\":\\"gpt-4o-mini\\",\\"base_url\\":\\"https://api.openai.com/v1\\"}" \\
+                            -F "settings={\\"cleanup\\":true}"
+                        ```
                         """
                     )
 
-            def on_convert(file_bytes, base_url, api_key, model_id, cleanup):
+            # Callback function triggered by convert_btn.click
+            def on_convert(file_bytes, url_str, base_url, api_key, model_id, cleanup):
                 """
-                Callback for the 'Convert' button.
-                We generate a unique name if the user uploads a file.
-                """
-                if not file_bytes:
-                    return "❌ Please upload a file first.", None
+                Converts the uploaded file or a URL to Markdown by calling the Docsifer
+                API. Returns the resulting Markdown content and path to the
+                temporary .md file for download.
 
-                unique_name = f"{scuid()}.tmp"
+                Args:
+                    file_bytes (bytes): The raw file content (None if not uploaded).
+                    url_str (str): The URL to convert (only used if file_bytes is None).
+                    base_url (str): The base URL for OpenAI or compatible LLM.
+                    api_key (str): The API key for the LLM.
+                    model_id (str): The model to use for the LLM.
+                    cleanup (bool): Whether to enable cleanup on HTML files.
+
+                Returns:
+                    (str, str):
+                        - The Markdown content or error message.
+                        - The path to the temp .md file for download.
+                """
+                # If file is not provided, we attempt the URL approach
+                if not file_bytes and not url_str:
+                    return "❌ Please upload a file or provide a URL.", None
+
+                # Create a unique temporary filename if file is present
+                unique_name = f"{scuid()}.tmp" if file_bytes else ""
+
+                # Call the convert API
                 markdown, temp_md_path = call_convert_api(
                     file_obj=file_bytes,
                     filename=unique_name,
+                    url=url_str,
                     openai_base_url=base_url,
                     openai_api_key=api_key,
                     openai_model=model_id,
                     cleanup=cleanup,
                 )
+
                 return markdown, temp_md_path
 
+            # Link the on_convert function to the convert_btn
             convert_btn.click(
                 fn=on_convert,
                 inputs=[
                     file_input,
+                    url_input,
                     openai_base_url,
                     openai_api_key,
                     openai_model,
@@ -348,6 +424,7 @@ def create_main_interface():
                 "View Docsifer usage statistics (access count, token usage, etc.)"
             )
             stats_btn = gr.Button("Get Stats")
+
             access_df = gr.DataFrame(
                 label="Access Stats",
                 headers=["Model", "Total", "Daily", "Weekly", "Monthly", "Yearly"],
@@ -359,6 +436,7 @@ def create_main_interface():
                 interactive=False,
             )
 
+            # When the button is clicked, call_stats_api_df returns two dataframes
             stats_btn.click(
                 fn=call_stats_api_df,
                 inputs=[],
@@ -368,17 +446,21 @@ def create_main_interface():
     return demo
 
 
-# Build our Gradio interface and mount it at the root path
 main_interface = create_main_interface()
 mount_gradio_app(app, main_interface, path="/")
 
 
-# Startup / Shutdown events
 @app.on_event("startup")
 async def startup_event():
+    """
+    Logs a startup message when the Docsifer Service is starting.
+    """
     logger.info("Docsifer Service is starting up...")
 
 
 @app.on_event("shutdown")
 async def shutdown_event():
+    """
+    Logs a shutdown message when the Docsifer Service is shutting down.
+    """
     logger.info("Docsifer Service is shutting down.")

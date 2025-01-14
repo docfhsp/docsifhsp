@@ -4,10 +4,12 @@ import logging
 import json
 import tempfile
 import os
+import aiohttp
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form, BackgroundTasks
 from pydantic import BaseModel
+from scuid import scuid
 
 from .service import DocsiferService
 from .analytics import Analytics
@@ -34,17 +36,21 @@ class ConvertResponse(BaseModel):
 @router.post("/convert", response_model=ConvertResponse)
 async def convert_document(
     background_tasks: BackgroundTasks,
-    file: UploadFile = File(..., description="File to convert (1 file per request)"),
+    file: UploadFile = File(None, description="File to convert"),
+    url: str = Form(
+        None, description="URL to convert (used only if no file is provided)"
+    ),
     openai: str = Form("{}", description="OpenAI config as a JSON object"),
     settings: str = Form("{}", description="Settings as a JSON object"),
 ):
     """
-    Convert a single uploaded file to Markdown, optionally using OpenAI for advanced text extraction.
-    - `openai` is a JSON string with keys: {"api_key": "...", "base_url": "..."}
-    - `settings` is a JSON string with keys: {"cleanup": bool}
-    - We do not store or track model_id in analytics; everything is aggregated as "docsifer".
+    Convert a file or an HTML page from a URL into Markdown.
+    If 'file' is provided, it has priority over 'url'.
+    - 'openai' is a JSON string with keys: {"api_key": "...", "base_url": "..."}
+    - 'settings' is a JSON string with keys: {"cleanup": bool}
     """
     try:
+        # Parse configs
         try:
             openai_config = json.loads(openai) if openai else {}
         except json.JSONDecodeError:
@@ -57,22 +63,43 @@ async def convert_document(
 
         cleanup = settings_config.get("cleanup", True)
 
-        with tempfile.TemporaryDirectory() as tmpdir:
-            temp_path = Path(tmpdir) / file.filename
-            contents = await file.read()
-            temp_path.write_bytes(contents)
-
-            result, token_count = await docsifer_service.convert_file(
-                file_path=str(temp_path), openai_config=openai_config, cleanup=cleanup
+        # If a file is provided, use the existing flow
+        if file is not None:
+            with tempfile.TemporaryDirectory() as tmpdir:
+                temp_path = Path(tmpdir) / file.filename
+                contents = await file.read()
+                temp_path.write_bytes(contents)
+                result, token_count = await docsifer_service.convert_file(
+                    file_path=str(temp_path),
+                    openai_config=openai_config,
+                    cleanup=cleanup,
+                )
+        # Otherwise, fetch HTML from URL and convert
+        elif url:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url) as resp:
+                    if resp.status != 200:
+                        raise ValueError(f"Failed to fetch URL: status {resp.status}")
+                    data = await resp.read()
+            with tempfile.TemporaryDirectory() as tmpdir:
+                temp_path = Path(tmpdir) / f"{scuid()}.html"
+                temp_path.write_bytes(data)
+                result, token_count = await docsifer_service.convert_file(
+                    file_path=str(temp_path),
+                    openai_config=openai_config,
+                    cleanup=cleanup,
+                )
+        else:
+            raise HTTPException(
+                status_code=400, detail="Provide either 'file' or 'url'."
             )
 
-        # Track usage in analytics (single aggregator => "docsifer")
+        # Track usage
         background_tasks.add_task(analytics.access, token_count)
-
         return ConvertResponse(**result)
 
     except Exception as e:
-        msg = f"Failed to convert document. Error: {str(e)}"
+        msg = f"Failed to convert content. Error: {str(e)}"
         logger.error(msg)
         raise HTTPException(status_code=500, detail=msg)
 

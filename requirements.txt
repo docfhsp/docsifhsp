@@ -13,3 +13,4 @@ scuid
 python-magic
 plotly
 matplotlib
+aiohttp
