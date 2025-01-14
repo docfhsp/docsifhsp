@@ -332,7 +332,13 @@ def create_main_interface():
                 # Right Column: Conversion Result Display & Download
                 with gr.Column():
                     # Display the result as Markdown
-                    output_md = gr.Markdown(label="Conversion Result (Markdown)")
+                    output_md = gr.Textbox(
+                        label="Markdown Preview",
+                        lines=30,
+                        max_lines=50,
+                        interactive=True,
+                        show_copy_button=True,
+                    )
 
                     # The user can still download the .md file
                     download_file = gr.File(
