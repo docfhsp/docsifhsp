@@ -62,7 +62,7 @@ Welcome to **Docsifer**, a specialized service that converts your files—like P
 
 - **Open Source**: The entire Docsifer codebase is publicly available for review and contribution.
 - **Efficient & Flexible**: Supports multiple file formats, ensuring quick and accurate Markdown conversion.
-- **Privacy-Focused**: We never store user data; all processing is temporary. We only collect minimal anonymous usage statistics to count the number of calls and the number of tokens, nothing else.
+- **Privacy-Focused**: We never store user data; all processing is temporary, with only minimal anonymous stats collected for call and token counts.
 - **Production-Ready**: Easy Docker deployment, interactive Gradio playground, and comprehensive REST API documentation.
 - **Community & Collaboration**: Contribute on [GitHub]({__metadata__["github"]}) or try it out on [Hugging Face Spaces]({__metadata__["spaces"]}).
 
@@ -329,24 +329,6 @@ def create_main_interface():
 
                     convert_btn = gr.Button("Convert")
 
-                # Right Column: Conversion Result Display & Download
-                with gr.Column():
-                    # Display the result as Markdown
-                    output_md = gr.Textbox(
-                        label="Markdown Preview",
-                        lines=30,
-                        max_lines=50,
-                        interactive=True,
-                        show_copy_button=True,
-                    )
-
-                    # The user can still download the .md file
-                    download_file = gr.File(
-                        label="Download",
-                        interactive=False,
-                        visible=True,
-                    )
-
                     gr.Markdown(
                         """
                         ### cURL Examples
@@ -369,6 +351,23 @@ def create_main_interface():
                             -F "settings={\\"cleanup\\":true}"
                         ```
                         """
+                    )
+
+                # Right Column: Conversion Result Display & Download
+                with gr.Column():
+                    # Display the result as Markdown
+                    output_md = gr.Textbox(
+                        label="Markdown Preview",
+                        lines=30,
+                        interactive=True,
+                        show_copy_button=True,
+                    )
+
+                    # The user can still download the .md file
+                    download_file = gr.File(
+                        label="Download",
+                        interactive=False,
+                        visible=True,
                     )
 
             # Callback function triggered by convert_btn.click
