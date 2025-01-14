@@ -358,7 +358,7 @@ def create_main_interface():
                     # Display the result as Markdown
                     output_md = gr.Textbox(
                         label="Markdown Preview",
-                        lines=30,
+                        lines=40,
                         interactive=True,
                         show_copy_button=True,
                     )
