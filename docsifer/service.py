@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import logging
 import tempfile
-import filetype
+import magic
+import mimetypes
 from pathlib import Path
 from typing import Optional, Dict, Tuple, Any
 
@@ -109,13 +110,14 @@ class DocsiferService:
 
         # Use a temp directory so MarkItDown sees the real file extension
         with tempfile.TemporaryDirectory() as tmpdir:
-            kind = filetype.guess(str(src))
-            if kind is None:
+            mime_type = magic.from_file(str(src), mime=True)
+            if not mime_type:
                 logger.warning(f"Could not detect file type for: {src}")
                 new_filename = src.name
             else:
-                logger.debug(f"Detected file type '{kind.extension}' for: {src}")
-                new_filename = f"{src.stem}.{kind.extension}"
+                logger.debug(f"Detected MIME type '{mime_type}' for: {src}")
+                guessed_ext = mimetypes.guess_extension(mime_type) or ""
+                new_filename = f"{src.stem}{guessed_ext}"
             tmp_path = Path(tmpdir) / new_filename
             tmp_path.write_bytes(src.read_bytes())
 

@@ -68,7 +68,7 @@ async def convert_document(
         if file is not None:
             with tempfile.TemporaryDirectory() as tmpdir:
                 contents = await file.read()
-                guessed_ext = mimetypes.guess_extension(file.content_type) or ""
+                guessed_ext = mimetypes.guess_extension(file.content_type) or ".tmp"
                 new_name = f"{Path(file.filename).stem}{guessed_ext}"
                 temp_path = Path(tmpdir) / new_name
                 temp_path.write_bytes(contents)
