@@ -6,11 +6,9 @@ pydantic
 cachetools
 upstash_redis==1.2.0
 markitdown
-openai
-pyquery
-tiktoken
+openai==1.59.7
+pyquery==2.0.1
+tiktoken==0.8.0
 scuid
-python-magic
-plotly
-matplotlib
-aiohttp
+aiohttp==3.11.11
+filetype==1.2.0

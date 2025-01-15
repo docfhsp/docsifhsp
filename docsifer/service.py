@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import tempfile
+import filetype
 from pathlib import Path
 from typing import Optional, Dict, Tuple, Any
 
@@ -107,7 +108,12 @@ class DocsiferService:
 
         # Use a temp directory so MarkItDown sees the real file extension
         with tempfile.TemporaryDirectory() as tmpdir:
-            tmp_path = Path(tmpdir) / src.name
+            kind = filetype.guess(str(src))
+            if kind is None:
+                new_filename = src.name
+            else:
+                new_filename = f"{src.stem}.{kind.extension}"
+            tmp_path = Path(tmpdir) / new_filename
             tmp_path.write_bytes(src.read_bytes())
 
             # If it's HTML and cleanup is requested
