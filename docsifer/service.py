@@ -110,8 +110,10 @@ class DocsiferService:
         with tempfile.TemporaryDirectory() as tmpdir:
             kind = filetype.guess(str(src))
             if kind is None:
+                logger.warning(f"Could not detect file type for: {src}")
                 new_filename = src.name
             else:
+                logger.debug(f"Detected file type '{kind.extension}' for: {src}")
                 new_filename = f"{src.stem}.{kind.extension}"
             tmp_path = Path(tmpdir) / new_filename
             tmp_path.write_bytes(src.read_bytes())
