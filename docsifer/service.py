@@ -15,6 +15,7 @@ from openai import OpenAI
 
 
 logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
 
 
 class DocsiferService:
