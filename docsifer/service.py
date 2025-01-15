@@ -111,18 +111,25 @@ class DocsiferService:
         # Use a temp directory so MarkItDown sees the real file extension
         with tempfile.TemporaryDirectory() as tmpdir:
             mime_type = magic.from_file(str(src), mime=True)
+            guessed_ext = mimetypes.guess_extension(mime_type) or ".tmp"
             if not mime_type:
                 logger.warning(f"Could not detect file type for: {src}")
                 new_filename = src.name
             else:
                 logger.debug(f"Detected MIME type '{mime_type}' for: {src}")
-                guessed_ext = mimetypes.guess_extension(mime_type) or ""
                 new_filename = f"{src.stem}{guessed_ext}"
             tmp_path = Path(tmpdir) / new_filename
             tmp_path.write_bytes(src.read_bytes())
 
+            logger.info(
+                "Using temp file: %s, MIME type: %s, Guessed ext: %s",
+                tmp_path,
+                mime_type,
+                guessed_ext,
+            )
+
             # If it's HTML and cleanup is requested
-            if cleanup and tmp_path.suffix.lower() in (".html", ".htm"):
+            if cleanup and guessed_ext.lower() in (".html", ".htm"):
                 self._maybe_cleanup_html(tmp_path)
 
             # Decide whether to use LLM or basic
