@@ -5,7 +5,6 @@ import json
 import tempfile
 import os
 import aiohttp
-import mimetypes
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form, BackgroundTasks
@@ -67,10 +66,8 @@ async def convert_document(
         # If a file is provided, use the existing flow
         if file is not None:
             with tempfile.TemporaryDirectory() as tmpdir:
+                temp_path = Path(tmpdir) / file.filename
                 contents = await file.read()
-                guessed_ext = mimetypes.guess_extension(file.content_type) or ".tmp"
-                new_name = f"{Path(file.filename).stem}{guessed_ext}"
-                temp_path = Path(tmpdir) / new_name
                 temp_path.write_bytes(contents)
                 result, token_count = await docsifer_service.convert_file(
                     file_path=str(temp_path),
