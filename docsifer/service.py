@@ -1,7 +1,6 @@
-# filename: service.py
-
 from __future__ import annotations
 
+import asyncio
 import logging
 import tempfile
 import magic
@@ -14,7 +13,6 @@ from pyquery import PyQuery as pq
 from markitdown import MarkItDown
 from openai import OpenAI
 
-
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
@@ -23,16 +21,17 @@ class DocsiferService:
     """
     A service that converts local files to Markdown using MarkItDown,
     optionally with an OpenAI LLM for advanced extraction.
-    Token counting uses "gpt-4o" as a heuristic via tiktoken.
+    Token counting uses a tiktoken encoder (heuristically with the provided model).
     """
 
     def __init__(self, model_name: str = "gpt-4o"):
         """
         Initialize the DocsiferService with a basic MarkItDown instance
-        and a tiktoken encoder for counting tokens using "gpt-4o".
+        and a tiktoken encoder for counting tokens using the provided model.
         """
         self._basic_markitdown = MarkItDown()  # MarkItDown without LLM
-        # Use "gpt-4o" for token counting
+
+        # Use the given model for token counting
         try:
             self._encoder = tiktoken.encoding_for_model(model_name)
         except Exception as e:
@@ -47,8 +46,13 @@ class DocsiferService:
 
     def _init_markitdown_with_llm(self, openai_config: Dict[str, Any]) -> MarkItDown:
         """
-        If openai_config has an 'api_key', configure openai and return
-        a MarkItDown instance with that OpenAI client.
+        Initialize a MarkItDown instance configured with an OpenAI LLM if an API key is provided.
+
+        Args:
+            openai_config: A dictionary containing OpenAI configuration (e.g., api_key, model, base_url).
+
+        Returns:
+            A MarkItDown instance configured with the OpenAI client, or the basic instance if no key is provided.
         """
         api_key = openai_config.get("api_key", "")
         if not api_key:
@@ -64,26 +68,34 @@ class DocsiferService:
 
     def _maybe_cleanup_html(self, html_file: Path) -> None:
         """
-        If the file is HTML, remove <style> tags, optionally hidden elements, etc.
+        If the file is HTML, remove <style> tags and hidden elements to clean up the content.
+
+        Args:
+            html_file: Path to the HTML file.
         """
         try:
             content = html_file.read_text(encoding="utf-8", errors="ignore")
             d = pq(content)
-            # Remove hidden elements and styles
+            # Remove hidden elements and inline styles that hide content.
             d(":hidden").remove()
             d("[style='display:none']").remove()
             d('*[style*="display:none"]').remove()
             d("style").remove()
-            cleaned_html = str(d)
-            cleaned_html = cleaned_html.strip()
+            cleaned_html = str(d).strip()
             html_file.write_text(cleaned_html, encoding="utf-8")
         except Exception as e:
             logger.error("HTML cleanup failed for %s: %s", html_file, e)
 
     def _count_tokens(self, text: str) -> int:
         """
-        Count tokens using the configured tiktoken encoder.
-        Fallback to whitespace-based counting if an error occurs.
+        Count tokens in the given text using the configured tiktoken encoder.
+        Falls back to a whitespace-based count if an error occurs.
+
+        Args:
+            text: The text to count tokens in.
+
+        Returns:
+            The number of tokens.
         """
         try:
             return len(self._encoder.encode(text))
@@ -93,14 +105,21 @@ class DocsiferService:
             )
             return len(text.split())
 
-    async def convert_file(
+    def _convert_file_sync(
         self, file_path: str, openai_config: Optional[dict] = None, cleanup: bool = True
     ) -> Tuple[Dict[str, str], int]:
         """
-        Converts a file at `file_path` to Markdown.
-        - If `cleanup` is True and file is .html/.htm, does HTML cleanup.
-        - If `openai_config` has a valid API key, use LLM-based MarkItDown.
-        Returns ({"filename": filename, "markdown": md_string}, token_count).
+        Synchronously convert a file at `file_path` to Markdown.
+        This helper method performs blocking file I/O, MIME detection, temporary file handling,
+        optional HTML cleanup, and MarkItDown conversion.
+
+        Args:
+            file_path: Path to the source file.
+            openai_config: Optional dictionary with OpenAI configuration.
+            cleanup: Whether to perform HTML cleanup if the file is an HTML file.
+
+        Returns:
+            A tuple containing a dictionary with keys "filename" and "markdown", and the token count.
         """
         src = Path(file_path)
         if not src.exists():
@@ -108,7 +127,7 @@ class DocsiferService:
 
         logger.info("Converting file: %s (cleanup=%s)", file_path, cleanup)
 
-        # Use a temp directory so MarkItDown sees the real file extension
+        # Create a temporary directory so that MarkItDown sees the proper file extension.
         with tempfile.TemporaryDirectory() as tmpdir:
             mime_type = magic.from_file(str(src), mime=True)
             guessed_ext = mimetypes.guess_extension(mime_type) or ".tmp"
@@ -128,11 +147,11 @@ class DocsiferService:
                 guessed_ext,
             )
 
-            # If it's HTML and cleanup is requested
+            # Perform HTML cleanup if requested.
             if cleanup and guessed_ext.lower() in (".html", ".htm"):
                 self._maybe_cleanup_html(tmp_path)
 
-            # Decide whether to use LLM or basic
+            # Decide whether to use LLM-enhanced conversion or the basic converter.
             if openai_config and openai_config.get("api_key"):
                 md_converter = self._init_markitdown_with_llm(openai_config)
             else:
@@ -144,7 +163,7 @@ class DocsiferService:
                 logger.error("MarkItDown conversion failed: %s", e)
                 raise RuntimeError(f"Conversion failed for '{file_path}': {e}")
 
-            # Count tokens
+            # Count tokens in the resulting markdown text.
             token_count = self._count_tokens(result_obj.text_content)
 
             result_dict = {
@@ -152,3 +171,23 @@ class DocsiferService:
                 "markdown": result_obj.text_content,
             }
             return result_dict, token_count
+
+    async def convert_file(
+        self, file_path: str, openai_config: Optional[dict] = None, cleanup: bool = True
+    ) -> Tuple[Dict[str, str], int]:
+        """
+        Asynchronously convert a file at `file_path` to Markdown.
+        This method offloads the blocking conversion process to a separate thread.
+
+        Args:
+            file_path: Path to the file to convert.
+            openai_config: Optional OpenAI configuration dictionary.
+            cleanup: Whether to perform HTML cleanup if applicable.
+
+        Returns:
+            A tuple containing the result dictionary (with keys "filename" and "markdown")
+            and the token count.
+        """
+        return await asyncio.to_thread(
+            self._convert_file_sync, file_path, openai_config, cleanup
+        )

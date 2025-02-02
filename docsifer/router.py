@@ -1,5 +1,3 @@
-# filename: router.py
-
 import logging
 import json
 import tempfile
@@ -17,14 +15,14 @@ from .analytics import Analytics
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["v1"], responses={404: {"description": "Not found"}})
 
-# Initialize analytics (single aggregator = "docsifer")
+# Initialize analytics (aggregated under "docsifer")
 analytics = Analytics(
     url=os.environ.get("REDIS_URL", "redis://localhost:6379/0"),
     token=os.environ.get("REDIS_TOKEN", "***"),
     sync_interval=30 * 60,  # e.g. 30 minutes
 )
 
-# Initialize the Docsifer service (token counting with gpt-4o)
+# Initialize the Docsifer service (using "gpt-4o" for token counting)
 docsifer_service = DocsiferService(model_name="gpt-4o")
 
 
@@ -45,12 +43,13 @@ async def convert_document(
 ):
     """
     Convert a file or an HTML page from a URL into Markdown.
-    If 'file' is provided, it has priority over 'url'.
-    - 'openai' is a JSON string with keys: {"api_key": "...", "base_url": "..."}
-    - 'settings' is a JSON string with keys: {"cleanup": bool}
+    If 'file' is provided, it takes priority over 'url'.
+
+    - 'openai' is a JSON string with keys such as {"api_key": "...", "base_url": "..."}.
+    - 'settings' is a JSON string with keys such as {"cleanup": bool}.
     """
     try:
-        # Parse configs
+        # Parse the JSON configuration parameters.
         try:
             openai_config = json.loads(openai) if openai else {}
         except json.JSONDecodeError:
@@ -63,7 +62,7 @@ async def convert_document(
 
         cleanup = settings_config.get("cleanup", True)
 
-        # If a file is provided, use the existing flow
+        # If a file is provided, use it; otherwise, fetch the content from the URL.
         if file is not None:
             with tempfile.TemporaryDirectory() as tmpdir:
                 temp_path = Path(tmpdir) / file.filename
@@ -74,7 +73,6 @@ async def convert_document(
                     openai_config=openai_config,
                     cleanup=cleanup,
                 )
-        # Otherwise, fetch HTML from URL and convert
         elif url:
             async with aiohttp.ClientSession() as session:
                 async with session.get(url) as resp:
@@ -94,7 +92,7 @@ async def convert_document(
                 status_code=400, detail="Provide either 'file' or 'url'."
             )
 
-        # Track usage
+        # Record token usage in the background.
         background_tasks.add_task(analytics.access, token_count)
         return ConvertResponse(**result)
 
@@ -108,7 +106,6 @@ async def convert_document(
 async def get_stats():
     """
     Return usage statistics (access, tokens) from the Analytics system.
-    All data is stored under "docsifer".
     """
     try:
         data = await analytics.stats()
