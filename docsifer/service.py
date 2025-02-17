@@ -13,6 +13,7 @@ import tiktoken
 from pyquery import PyQuery as pq
 from markitdown import MarkItDown
 from openai import OpenAI
+from youtube_transcript_api import YouTubeTranscriptApi
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
