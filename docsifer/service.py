@@ -7,6 +7,7 @@ import magic
 import mimetypes
 from pathlib import Path
 from typing import Optional, Dict, Tuple, Any
+from scuid import scuid
 
 import tiktoken
 from pyquery import PyQuery as pq
@@ -105,8 +106,8 @@ class DocsiferService:
             )
             return len(text.split())
 
-    def _convert_file_sync(
-        self, file_path: str, openai_config: Optional[dict] = None, cleanup: bool = True
+    def _convert_sync(
+        self, source: str, openai_config: Optional[dict] = None, cleanup: bool = True
     ) -> Tuple[Dict[str, str], int]:
         """
         Synchronously convert a file at `file_path` to Markdown.
@@ -114,73 +115,79 @@ class DocsiferService:
         optional HTML cleanup, and MarkItDown conversion.
 
         Args:
-            file_path: Path to the source file.
+            source: Path to the source file or URL to fetch content from.
             openai_config: Optional dictionary with OpenAI configuration.
             cleanup: Whether to perform HTML cleanup if the file is an HTML file.
 
         Returns:
             A tuple containing a dictionary with keys "filename" and "markdown", and the token count.
         """
-        src = Path(file_path)
-        if not src.exists():
-            raise FileNotFoundError(f"File not found: {file_path}")
+        if source.startswith("http"):
+            filename = f"{scuid()}.html"
+        else:
+            src = Path(source)
+            if not src.exists():
+                raise FileNotFoundError(f"File not found: {source}")
 
-        logger.info("Converting file: %s (cleanup=%s)", file_path, cleanup)
+            logger.info("Converting file: %s (cleanup=%s)", source, cleanup)
 
-        # Create a temporary directory so that MarkItDown sees the proper file extension.
-        with tempfile.TemporaryDirectory() as tmpdir:
-            mime_type = magic.from_file(str(src), mime=True)
-            guessed_ext = mimetypes.guess_extension(mime_type) or ".tmp"
-            if not mime_type:
-                logger.warning(f"Could not detect file type for: {src}")
-                new_filename = src.name
-            else:
-                logger.debug(f"Detected MIME type '{mime_type}' for: {src}")
-                new_filename = f"{src.stem}{guessed_ext}"
-            tmp_path = Path(tmpdir) / new_filename
-            tmp_path.write_bytes(src.read_bytes())
+            # Create a temporary directory so that MarkItDown sees the proper file extension.
+            with tempfile.TemporaryDirectory() as tmpdir:
+                mime_type = magic.from_file(str(src), mime=True)
+                guessed_ext = mimetypes.guess_extension(mime_type) or ".tmp"
+                if not mime_type:
+                    logger.warning(f"Could not detect file type for: {src}")
+                    new_filename = src.name
+                else:
+                    logger.debug(f"Detected MIME type '{mime_type}' for: {src}")
+                    new_filename = f"{src.stem}{guessed_ext}"
+                tmp_path = Path(tmpdir) / new_filename
+                tmp_path.write_bytes(src.read_bytes())
 
-            logger.info(
-                "Using temp file: %s, MIME type: %s, Guessed ext: %s",
-                tmp_path,
-                mime_type,
-                guessed_ext,
-            )
+                logger.info(
+                    "Using temp file: %s, MIME type: %s, Guessed ext: %s",
+                    tmp_path,
+                    mime_type,
+                    guessed_ext,
+                )
 
-            # Perform HTML cleanup if requested.
-            if cleanup and guessed_ext.lower() in (".html", ".htm"):
-                self._maybe_cleanup_html(tmp_path)
+                # Perform HTML cleanup if requested.
+                if cleanup and guessed_ext.lower() in (".html", ".htm"):
+                    self._maybe_cleanup_html(tmp_path)
 
-            # Decide whether to use LLM-enhanced conversion or the basic converter.
-            if openai_config and openai_config.get("api_key"):
-                md_converter = self._init_markitdown_with_llm(openai_config)
-            else:
-                md_converter = self._basic_markitdown
+            filename = src.name
+            source = str(tmp_path)
 
-            try:
-                result_obj = md_converter.convert(str(tmp_path))
-            except Exception as e:
-                logger.error("MarkItDown conversion failed: %s", e)
-                raise RuntimeError(f"Conversion failed for '{file_path}': {e}")
+        # Decide whether to use LLM-enhanced conversion or the basic converter.
+        if openai_config and openai_config.get("api_key"):
+            md_converter = self._init_markitdown_with_llm(openai_config)
+        else:
+            md_converter = self._basic_markitdown
 
-            # Count tokens in the resulting markdown text.
-            token_count = self._count_tokens(result_obj.text_content)
+        try:
+            result_obj = md_converter.convert(source)
+        except Exception as e:
+            logger.error("MarkItDown conversion failed: %s", e)
+            raise RuntimeError(f"Conversion failed for '{source}': {e}")
 
-            result_dict = {
-                "filename": src.name,
-                "markdown": result_obj.text_content,
-            }
-            return result_dict, token_count
+        # Count tokens in the resulting markdown text.
+        token_count = self._count_tokens(result_obj.text_content)
+
+        result_dict = {
+            "filename": filename,
+            "markdown": result_obj.text_content,
+        }
+        return result_dict, token_count
 
     async def convert_file(
-        self, file_path: str, openai_config: Optional[dict] = None, cleanup: bool = True
+        self, source: str, openai_config: Optional[dict] = None, cleanup: bool = True
     ) -> Tuple[Dict[str, str], int]:
         """
-        Asynchronously convert a file at `file_path` to Markdown.
+        Asynchronously convert a file at `source` to Markdown.
         This method offloads the blocking conversion process to a separate thread.
 
         Args:
-            file_path: Path to the file to convert.
+            source: Path to the file to convert or a URL to fetch content from.
             openai_config: Optional OpenAI configuration dictionary.
             cleanup: Whether to perform HTML cleanup if applicable.
 
@@ -189,5 +196,5 @@ class DocsiferService:
             and the token count.
         """
         return await asyncio.to_thread(
-            self._convert_file_sync, file_path, openai_config, cleanup
+            self._convert_sync, source, openai_config, cleanup
         )

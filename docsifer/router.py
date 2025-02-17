@@ -2,12 +2,12 @@ import logging
 import json
 import tempfile
 import os
-import aiohttp
+# import aiohttp
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form, BackgroundTasks
 from pydantic import BaseModel
-from scuid import scuid
+# from scuid import scuid
 
 from .service import DocsiferService
 from .analytics import Analytics
@@ -69,24 +69,29 @@ async def convert_document(
                 contents = await file.read()
                 temp_path.write_bytes(contents)
                 result, token_count = await docsifer_service.convert_file(
-                    file_path=str(temp_path),
+                    source=str(temp_path),
                     openai_config=openai_config,
                     cleanup=cleanup,
                 )
         elif url:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(url) as resp:
-                    if resp.status != 200:
-                        raise ValueError(f"Failed to fetch URL: status {resp.status}")
-                    data = await resp.read()
-            with tempfile.TemporaryDirectory() as tmpdir:
-                temp_path = Path(tmpdir) / f"{scuid()}.html"
-                temp_path.write_bytes(data)
-                result, token_count = await docsifer_service.convert_file(
-                    file_path=str(temp_path),
-                    openai_config=openai_config,
-                    cleanup=cleanup,
-                )
+            # async with aiohttp.ClientSession() as session:
+            #     async with session.get(url) as resp:
+            #         if resp.status != 200:
+            #             raise ValueError(f"Failed to fetch URL: status {resp.status}")
+            #         data = await resp.read()
+            # with tempfile.TemporaryDirectory() as tmpdir:
+            #     temp_path = Path(tmpdir) / f"{scuid()}.html"
+            #     temp_path.write_bytes(data)
+            #     result, token_count = await docsifer_service.convert_file(
+            #         source=str(temp_path),
+            #         openai_config=openai_config,
+            #         cleanup=cleanup,
+            #     )
+            result, token_count = await docsifer_service.convert_file(
+                source=str(url),
+                openai_config=openai_config,
+                cleanup=cleanup,
+            )
         else:
             raise HTTPException(
                 status_code=400, detail="Provide either 'file' or 'url'."
