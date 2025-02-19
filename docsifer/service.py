@@ -159,6 +159,10 @@ class DocsiferService:
             filename = new_filename
             source = str(tmp_path)
 
+        with open(source) as f:
+            xxx = f.read()
+            print(f"Filename: {filename}, Source: {source}, Content: {xxx}")
+
         # Decide whether to use LLM-enhanced conversion or the basic converter.
         if openai_config and openai_config.get("api_key"):
             md_converter = self._init_markitdown_with_llm(openai_config)
