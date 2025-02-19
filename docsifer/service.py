@@ -143,14 +143,13 @@ class DocsiferService:
                     new_filename = f"{src.stem}{guessed_ext}"
                 tmp_path = Path(tmpdir) / new_filename
                 tmp_path.write_bytes(src.read_bytes())
-                if not tmp_path.exists():
-                    raise FileNotFoundError(f"Temporary file not found: {tmp_path}")
 
                 logger.info(
-                    "Using temp file: %s, MIME type: %s, Guessed ext: %s",
+                    "Using temp file: %s, MIME type: %s, Guessed ext: %s, Existing: %s",
                     tmp_path,
                     mime_type,
                     guessed_ext,
+                    tmp_path.exists(),
                 )
 
                 # Perform HTML cleanup if requested.
