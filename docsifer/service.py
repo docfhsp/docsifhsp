@@ -131,37 +131,32 @@ class DocsiferService:
 
             logger.info("Converting file: %s (cleanup=%s)", source, cleanup)
 
-            # Create a temporary directory so that MarkItDown sees the proper file extension.
-            with tempfile.TemporaryDirectory() as tmpdir:
-                mime_type = magic.from_file(str(src), mime=True)
-                guessed_ext = mimetypes.guess_extension(mime_type) or ".tmp"
-                if not mime_type:
-                    logger.warning(f"Could not detect file type for: {src}")
-                    new_filename = src.name
-                else:
-                    logger.debug(f"Detected MIME type '{mime_type}' for: {src}")
-                    new_filename = f"{src.stem}{guessed_ext}"
-                tmp_path = Path(tmpdir) / new_filename
-                tmp_path.write_bytes(src.read_bytes())
+            mime_type = magic.from_file(str(src), mime=True)
+            guessed_ext = mimetypes.guess_extension(mime_type) or ".tmp"
+            if not mime_type:
+                logger.warning(f"Could not detect file type for: {src}")
+                new_filename = src.name
+            else:
+                logger.debug(f"Detected MIME type '{mime_type}' for: {src}")
+                new_filename = f"{src.stem}{guessed_ext}"
+            tmp_path = src.parent / new_filename
+            tmp_path.write_bytes(src.read_bytes())
+            src.unlink()
 
-                logger.info(
-                    "Using temp file: %s, MIME type: %s, Guessed ext: %s, Existing: %s",
-                    tmp_path,
-                    mime_type,
-                    guessed_ext,
-                    tmp_path.exists(),
-                )
+            logger.info(
+                "Using temp file: %s, MIME type: %s, Guessed ext: %s, Existing: %s",
+                tmp_path,
+                mime_type,
+                guessed_ext,
+                tmp_path.exists(),
+            )
 
-                # Perform HTML cleanup if requested.
-                if cleanup and guessed_ext.lower() in (".html", ".htm"):
-                    self._maybe_cleanup_html(tmp_path)
+            # Perform HTML cleanup if requested.
+            if cleanup and guessed_ext.lower() in (".html", ".htm"):
+                self._maybe_cleanup_html(tmp_path)
 
             filename = new_filename
-            source = str(tmp_path)
-
-        with open(source) as f:
-            xxx = f.read()
-            print(f"Filename: {filename}, Source: {source}, Content: {xxx}")
+            source = tmp_path
 
         # Decide whether to use LLM-enhanced conversion or the basic converter.
         if openai_config and openai_config.get("api_key"):
@@ -174,6 +169,9 @@ class DocsiferService:
         except Exception as e:
             logger.error("MarkItDown conversion failed: %s", e)
             raise RuntimeError(f"Conversion failed for '{source}': {e}")
+          
+        if isinstance(source, Path) and source.exists():
+            source.unlink()
 
         # Count tokens in the resulting markdown text.
         token_count = self._count_tokens(result_obj.text_content)
