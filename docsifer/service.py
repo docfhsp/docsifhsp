@@ -13,7 +13,6 @@ import tiktoken
 from pyquery import PyQuery as pq
 from markitdown import MarkItDown
 from openai import OpenAI
-from youtube_transcript_api import YouTubeTranscriptApi
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -144,6 +143,8 @@ class DocsiferService:
                     new_filename = f"{src.stem}{guessed_ext}"
                 tmp_path = Path(tmpdir) / new_filename
                 tmp_path.write_bytes(src.read_bytes())
+                if not tmp_path.exists():
+                    raise FileNotFoundError(f"Temporary file not found: {tmp_path}")
 
                 logger.info(
                     "Using temp file: %s, MIME type: %s, Guessed ext: %s",
@@ -156,7 +157,7 @@ class DocsiferService:
                 if cleanup and guessed_ext.lower() in (".html", ".htm"):
                     self._maybe_cleanup_html(tmp_path)
 
-            filename = src.name
+            filename = new_filename
             source = str(tmp_path)
 
         # Decide whether to use LLM-enhanced conversion or the basic converter.
