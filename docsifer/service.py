@@ -168,8 +168,10 @@ class DocsiferService:
 
         # Decide whether to use LLM-enhanced conversion or the basic converter.
         if openai_config and openai_config.get("api_key"):
+            print("openai_config:\n", openai_config)
             md_converter = self._init_markitdown_with_llm(openai_config)
         else:
+            print("no openai_config")
             md_converter = self._basic_markitdown
 
         # Load cookies if provided in the HTTP config.
