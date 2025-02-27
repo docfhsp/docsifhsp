@@ -104,3 +104,4 @@ Contributions are welcome! Check out the [contribution guidelines](https://githu
 ## 📜 License
 
 This project is licensed under the **MIT License**. See the [LICENSE](https://github.com/lh0x00/docsifer/blob/main/LICENSE) file for details.
+

@@ -3,8 +3,11 @@ from __future__ import annotations
 import asyncio
 import logging
 import tempfile
+
+import requests.cookies
 import magic
 import mimetypes
+import requests
 from pathlib import Path
 from typing import Optional, Dict, Tuple, Any
 from scuid import scuid
@@ -107,7 +110,11 @@ class DocsiferService:
             return len(text.split())
 
     def _convert_sync(
-        self, source: str, openai_config: Optional[dict] = None, cleanup: bool = True
+        self,
+        source: str,
+        openai_config: Optional[dict] = None,
+        http_config: Optional[dict] = None,
+        cleanup: bool = True,
     ) -> Tuple[Dict[str, str], int]:
         """
         Synchronously convert a file at `file_path` to Markdown.
@@ -117,6 +124,7 @@ class DocsiferService:
         Args:
             source: Path to the source file or URL to fetch content from.
             openai_config: Optional dictionary with OpenAI configuration.
+            http_config: Optional dictionary with HTTP configuration.
             cleanup: Whether to perform HTML cleanup if the file is an HTML file.
 
         Returns:
@@ -164,12 +172,21 @@ class DocsiferService:
         else:
             md_converter = self._basic_markitdown
 
+        # Load cookies if provided in the HTTP config.
+        if http_config:
+            if "cookies" in http_config:
+                requests.cookies.cookiejar_from_dict(
+                    http_config["cookies"],
+                    requests.cookies.RequestsCookieJar,
+                    overwrite=True,
+                )
+
         try:
             result_obj = md_converter.convert(source)
         except Exception as e:
             logger.error("MarkItDown conversion failed: %s", e)
             raise RuntimeError(f"Conversion failed for '{source}': {e}")
-          
+
         if isinstance(source, Path) and source.exists():
             source.unlink()
 
@@ -183,7 +200,11 @@ class DocsiferService:
         return result_dict, token_count
 
     async def convert_file(
-        self, source: str, openai_config: Optional[dict] = None, cleanup: bool = True
+        self,
+        source: str,
+        openai_config: Optional[dict] = None,
+        http_config: Optional[dict] = None,
+        cleanup: bool = True,
     ) -> Tuple[Dict[str, str], int]:
         """
         Asynchronously convert a file at `source` to Markdown.
@@ -192,6 +213,7 @@ class DocsiferService:
         Args:
             source: Path to the file to convert or a URL to fetch content from.
             openai_config: Optional OpenAI configuration dictionary.
+            http_config: Optional HTTP configuration dictionary.
             cleanup: Whether to perform HTML cleanup if applicable.
 
         Returns:
@@ -199,6 +221,6 @@ class DocsiferService:
             and the token count.
         """
         return await asyncio.to_thread(
-            self._convert_sync, source, openai_config, cleanup
+            self._convert_sync, source, openai_config, http_config, cleanup
         )
 
