@@ -39,6 +39,7 @@ async def convert_document(
         None, description="URL to convert (used only if no file is provided)"
     ),
     openai: str = Form("{}", description="OpenAI config as a JSON object"),
+    http: str = Form("{}", description="HTTP config as a JSON object"),
     settings: str = Form("{}", description="Settings as a JSON object"),
 ):
     """
@@ -56,6 +57,11 @@ async def convert_document(
             raise ValueError("Invalid JSON in 'openai' parameter.")
 
         try:
+            http_config = json.loads(http) if http else {}
+        except json.JSONDecodeError:
+            raise ValueError("Invalid JSON in 'http' parameter.")
+
+        try:
             settings_config = json.loads(settings) if settings else {}
         except json.JSONDecodeError:
             raise ValueError("Invalid JSON in 'settings' parameter.")
@@ -71,6 +77,7 @@ async def convert_document(
                 result, token_count = await docsifer_service.convert_file(
                     source=str(temp_path),
                     openai_config=openai_config,
+                    http_config=http_config,
                     cleanup=cleanup,
                 )
         elif url:
@@ -90,6 +97,7 @@ async def convert_document(
             result, token_count = await docsifer_service.convert_file(
                 source=str(url),
                 openai_config=openai_config,
+                http_config=http_config,
                 cleanup=cleanup,
             )
         else:

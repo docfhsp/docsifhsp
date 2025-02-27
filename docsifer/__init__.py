@@ -101,6 +101,7 @@ def call_convert_api(
     openai_base_url: Optional[str] = None,
     openai_api_key: Optional[str] = None,
     openai_model: Optional[str] = None,
+    http_cookies: Optional[str] = None,
 ) -> Tuple[str, str]:
     """
     Call the /v1/convert endpoint, returning (markdown_content, md_file_path).
@@ -115,6 +116,7 @@ def call_convert_api(
         openai_base_url (str, optional): Base URL for OpenAI or compatible LLM.
         openai_api_key (str, optional): API key for the LLM.
         openai_model (str, optional): Model name to use for LLM-based extraction.
+        http_cookies (str, optional): JSON-formatted string representing cookies for HTTP requests.
 
     Returns:
         (str, str):
@@ -142,6 +144,14 @@ def call_convert_api(
     # If the user left the OpenAI fields blank, remove the `openai` key from data
     if len(openai_dict) <= 3:
         data.pop("openai")
+
+    # Build the HTTP configuration object
+    if http_cookies and http_cookies.strip():
+        try:
+            cookies_obj = json.loads(http_cookies)
+        except Exception as e:
+            return (f"❌ Invalid JSON for HTTP Cookies: {str(e)}", "")
+        data["http"] = json.dumps({"cookies": cookies_obj})
 
     # Decide if we're sending a file or a URL
     files = {}
@@ -220,7 +230,7 @@ def call_stats_api_df() -> Tuple[pd.DataFrame, pd.DataFrame]:
         all_models = set()
         for period_key in ["total", "daily", "weekly", "monthly", "yearly"]:
             period_dict = bucket.get(period_key, {})
-            all_models.update(period_dict.keys())  # typically just "docsifer"
+            all_models.update(period_dict.keys())
 
         result_dict = {
             "Model": [],
@@ -251,7 +261,7 @@ def create_main_interface():
     Create a Gradio Blocks interface that includes:
       1) 'Conversion Playground' Tab:
          - File upload OR URL-based conversion
-         - Optional OpenAI configuration
+         - Optional OpenAI configuration and HTTP configuration
          - Convert button
          - Display of conversion result as Markdown
          - Downloadable .md file
@@ -317,6 +327,17 @@ def create_main_interface():
                             value="gpt-4o-mini",
                         )
 
+                    with gr.Accordion("HTTP Configuration (Optional)", open=False):
+                        gr.Markdown(
+                            "Provide additional HTTP configuration. "
+                            "In particular, you can specify cookies as a JSON object to be included in the request."
+                        )
+                        http_cookies = gr.Textbox(
+                            label="Cookies",
+                            placeholder='e.g. {"session": "abcd1234"}',
+                            lines=3,
+                        )
+
                     with gr.Accordion("Conversion Settings", open=True):
                         gr.Markdown(
                             "Enable to remove <style> tags or hidden elements "
@@ -371,11 +392,12 @@ def create_main_interface():
                     )
 
             # Callback function triggered by convert_btn.click
-            def on_convert(file_bytes, url_str, base_url, api_key, model_id, cleanup):
+            def on_convert(
+                file_bytes, url_str, base_url, api_key, model_id, cleanup, http_cookies
+            ):
                 """
-                Converts the uploaded file or a URL to Markdown by calling the Docsifer
-                API. Returns the resulting Markdown content and path to the
-                temporary .md file for download.
+                Converts the uploaded file or a URL to Markdown by calling the Docsifer API.
+                Returns the resulting Markdown content and path to the temporary .md file for download.
 
                 Args:
                     file_bytes (bytes): The raw file content (None if not uploaded).
@@ -384,20 +406,20 @@ def create_main_interface():
                     api_key (str): The API key for the LLM.
                     model_id (str): The model to use for the LLM.
                     cleanup (bool): Whether to enable cleanup on HTML files.
+                    http_cookies (str): JSON-formatted string for HTTP cookies.
 
                 Returns:
                     (str, str):
                         - The Markdown content or error message.
                         - The path to the temp .md file for download.
                 """
-                # If file is not provided, we attempt the URL approach
                 if not file_bytes and not url_str:
                     return "❌ Please upload a file or provide a URL.", None
 
                 # Create a unique temporary filename if file is present
                 unique_name = f"{scuid()}.tmp" if file_bytes else ""
 
-                # Call the convert API
+                # Call the convert API with HTTP configuration
                 markdown, temp_md_path = call_convert_api(
                     file_obj=file_bytes,
                     filename=unique_name,
@@ -406,6 +428,7 @@ def create_main_interface():
                     openai_api_key=api_key,
                     openai_model=model_id,
                     cleanup=cleanup,
+                    http_cookies=http_cookies,
                 )
 
                 return markdown, temp_md_path
@@ -420,6 +443,7 @@ def create_main_interface():
                     openai_api_key,
                     openai_model,
                     cleanup_toggle,
+                    http_cookies,
                 ],
                 outputs=[output_md, download_file],
             )
