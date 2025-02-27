@@ -20,7 +20,7 @@ jobs:
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          if ! git push https://lamhieu:$HF_TOKEN@huggingface.co/spaces/lamhieu/docsifer main; then
+          if ! git push https://lamhieu:$HF_TOKEN@huggingface.co/spaces/lamhieu/docsifer main -f; then
             echo "Failed to sync with HuggingFace Space"
             exit 1
           fi
