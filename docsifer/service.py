@@ -160,8 +160,8 @@ class DocsiferService:
             )
 
             # Perform HTML cleanup if requested.
-            if cleanup and guessed_ext.lower() in (".html", ".htm"):
-                self._maybe_cleanup_html(tmp_path)
+            # if cleanup and guessed_ext.lower() in (".html", ".htm"):
+            #     self._maybe_cleanup_html(tmp_path)
 
             filename = new_filename
             source = tmp_path
@@ -173,13 +173,13 @@ class DocsiferService:
             md_converter = self._basic_markitdown
 
         # Load cookies if provided in the HTTP config.
-        if http_config:
-            if "cookies" in http_config:
-                requests.cookies.cookiejar_from_dict(
-                    http_config["cookies"],
-                    requests.cookies.RequestsCookieJar,
-                    overwrite=True,
-                )
+        # if http_config:
+        #     if "cookies" in http_config:
+        #         requests.cookies.cookiejar_from_dict(
+        #             http_config["cookies"],
+        #             requests.cookies.RequestsCookieJar,
+        #             overwrite=True,
+        #         )
 
         try:
             result_obj = md_converter.convert(source)
