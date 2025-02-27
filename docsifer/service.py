@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import tempfile
+# import tempfile
 
-import requests.cookies
+# import requests.cookies
 import magic
 import mimetypes
-import requests
+# import requests
 from pathlib import Path
 from typing import Optional, Dict, Tuple, Any
 from scuid import scuid
@@ -130,8 +130,6 @@ class DocsiferService:
         Returns:
             A tuple containing a dictionary with keys "filename" and "markdown", and the token count.
         """
-        file_extension = None
-
         if source.startswith("http"):
             filename = f"{scuid()}.html"
         else:
@@ -165,7 +163,6 @@ class DocsiferService:
             if cleanup and guessed_ext.lower() in (".html", ".htm"):
                 self._maybe_cleanup_html(tmp_path)
 
-            file_extension = guessed_ext.lstrip(".")
             filename = new_filename
             source = tmp_path
 
@@ -176,16 +173,16 @@ class DocsiferService:
             md_converter = self._basic_markitdown
 
         # Load cookies if provided in the HTTP config.
-        if http_config:
-            if "cookies" in http_config:
-                requests.cookies.cookiejar_from_dict(
-                    http_config["cookies"],
-                    requests.cookies.RequestsCookieJar,
-                    overwrite=True,
-                )
+        # if http_config:
+        #     if "cookies" in http_config:
+        #         requests.cookies.cookiejar_from_dict(
+        #             http_config["cookies"],
+        #             requests.cookies.RequestsCookieJar,
+        #             overwrite=True,
+        #         )
 
         try:
-            result_obj = md_converter.convert(source, file_extension=file_extension)
+            result_obj = md_converter.convert(source)
             print("result_obj:\n", result_obj.text_content)
         except Exception as e:
             logger.error("MarkItDown conversion failed: %s", e)
