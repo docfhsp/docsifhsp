@@ -183,7 +183,7 @@ class DocsiferService:
 
         try:
             result_obj = md_converter.convert(source)
-            print("result_obj:\n", result_obj)
+            print("result_obj:\n", result_obj.text_content)
         except Exception as e:
             logger.error("MarkItDown conversion failed: %s", e)
             raise RuntimeError(f"Conversion failed for '{source}': {e}")
