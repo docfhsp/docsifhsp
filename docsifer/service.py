@@ -183,6 +183,7 @@ class DocsiferService:
 
         try:
             result_obj = md_converter.convert(source)
+            print("result_obj:\n", result_obj)
         except Exception as e:
             logger.error("MarkItDown conversion failed: %s", e)
             raise RuntimeError(f"Conversion failed for '{source}': {e}")
@@ -223,4 +224,3 @@ class DocsiferService:
         return await asyncio.to_thread(
             self._convert_sync, source, openai_config, http_config, cleanup
         )
-
