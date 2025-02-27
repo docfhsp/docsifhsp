@@ -184,14 +184,14 @@ class DocsiferService:
         #         )
 
         try:
-            result_obj = md_converter.convert(source)
+            result_obj = md_converter.convert(source=str(source))
             print("result_obj:\n", result_obj.text_content)
         except Exception as e:
             logger.error("MarkItDown conversion failed: %s", e)
             raise RuntimeError(f"Conversion failed for '{source}': {e}")
 
-        if isinstance(source, Path) and source.exists():
-            source.unlink()
+        # if isinstance(source, Path) and source.exists():
+        #     source.unlink()
 
         # Count tokens in the resulting markdown text.
         token_count = self._count_tokens(result_obj.text_content)
