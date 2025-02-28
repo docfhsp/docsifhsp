@@ -149,7 +149,7 @@ class DocsiferService:
                 new_filename = f"{src.stem}{guessed_ext}"
             tmp_path = src.parent / new_filename
             tmp_path.write_bytes(src.read_bytes())
-            src.unlink()
+            # src.unlink()
 
             logger.info(
                 "Using temp file: %s, MIME type: %s, Guessed ext: %s, Existing: %s",
@@ -160,8 +160,8 @@ class DocsiferService:
             )
 
             # Perform HTML cleanup if requested.
-            if cleanup and guessed_ext.lower() in (".html", ".htm"):
-                self._maybe_cleanup_html(tmp_path)
+            # if cleanup and guessed_ext.lower() in (".html", ".htm"):
+            #     self._maybe_cleanup_html(tmp_path)
 
             filename = new_filename
             source = tmp_path
@@ -173,13 +173,13 @@ class DocsiferService:
             md_converter = self._basic_markitdown
 
         # Load cookies if provided in the HTTP config.
-        if http_config:
-            if "cookies" in http_config:
-                requests.cookies.cookiejar_from_dict(
-                    http_config["cookies"],
-                    requests.cookies.RequestsCookieJar,
-                    overwrite=True,
-                )
+        # if http_config:
+        #     if "cookies" in http_config:
+        #         requests.cookies.cookiejar_from_dict(
+        #             http_config["cookies"],
+        #             requests.cookies.RequestsCookieJar,
+        #             overwrite=True,
+        #         )
 
         try:
             result_obj = md_converter.convert(source)
@@ -188,8 +188,8 @@ class DocsiferService:
             logger.error("MarkItDown conversion failed: %s", e)
             raise RuntimeError(f"Conversion failed for '{source}': {e}")
 
-        if isinstance(source, Path) and source.exists():
-            source.unlink()
+        # if isinstance(source, Path) and source.exists():
+        #     source.unlink()
 
         # Count tokens in the resulting markdown text.
         token_count = self._count_tokens(result_obj.text_content)
