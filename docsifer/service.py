@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import asyncio
 import logging
+
 # import tempfile
 
-# import requests.cookies
+import requests.cookies
 import magic
 import mimetypes
-# import requests
+import requests
 from pathlib import Path
 from typing import Optional, Dict, Tuple, Any
 from scuid import scuid
@@ -173,13 +174,13 @@ class DocsiferService:
             md_converter = self._basic_markitdown
 
         # Load cookies if provided in the HTTP config.
-        # if http_config:
-        #     if "cookies" in http_config:
-        #         requests.cookies.cookiejar_from_dict(
-        #             http_config["cookies"],
-        #             requests.cookies.RequestsCookieJar,
-        #             overwrite=True,
-        #         )
+        if http_config:
+            if "cookies" in http_config:
+                requests.cookies.cookiejar_from_dict(
+                    http_config["cookies"],
+                    requests.cookies.RequestsCookieJar,
+                    overwrite=True,
+                )
 
         try:
             result_obj = md_converter.convert(source)
