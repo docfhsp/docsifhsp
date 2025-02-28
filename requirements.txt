@@ -5,7 +5,7 @@ requests
 pydantic
 cachetools
 scuid
-markitdown @ git+https://github.com/lh0x00/markitdown@74f41bd
+markitdown @ git+https://github.com/microsoft/markitdown@519fe172
 upstash_redis==1.2.0
 openai==1.59.7
 pyquery==2.0.1
