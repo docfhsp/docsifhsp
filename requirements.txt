@@ -5,7 +5,7 @@ requests
 pydantic
 cachetools
 scuid
-markitdown==0.0.1a2
+markitdown==0.0.1a4
 upstash_redis==1.2.0
 openai==1.59.7
 pyquery==2.0.1
