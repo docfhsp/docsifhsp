@@ -67,7 +67,6 @@ async def convert_document(
             raise ValueError("Invalid JSON in 'settings' parameter.")
 
         cleanup = settings_config.get("cleanup", True)
-        print("> convert_document, file", [file, file is not None])
 
         # If a file is provided, use it; otherwise, fetch the content from the URL.
         if file is not None:
@@ -75,7 +74,6 @@ async def convert_document(
                 temp_path = Path(tmpdir) / file.filename
                 contents = await file.read()
                 temp_path.write_bytes(contents)
-                print("> convert_document, temp_path", [temp_path, temp_path.exists()])
                 result, token_count = await docsifer_service.convert_file(
                     source=str(temp_path),
                     openai_config=openai_config,
