@@ -150,14 +150,15 @@ class DocsiferService:
                 new_filename = f"{src.stem}{guessed_ext}"
             tmp_path = src.parent / new_filename
             tmp_path.write_bytes(src.read_bytes())
-            src.unlink()
+            # src.unlink()
 
             logger.info(
-                "Using temp file: %s, MIME type: %s, Guessed ext: %s, Existing: %s",
+                "Using temp file: %s, MIME type: %s, Guessed ext: %s, Existing: %s, Source size: %s",
                 tmp_path,
                 mime_type,
                 guessed_ext,
                 tmp_path.exists(),
+                src.stat().st_size,
             )
 
             # Perform HTML cleanup if requested.
