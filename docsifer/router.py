@@ -1,129 +1,83 @@
-import logging
-import json
+import requests
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel, HttpUrl
+import gradio as gr
 import tempfile
 import os
-# import aiohttp
-from pathlib import Path
 
-from fastapi import APIRouter, HTTPException, UploadFile, File, Form, BackgroundTasks
-from pydantic import BaseModel
-# from scuid import scuid
+# Backend endpoint for conversion (update as needed)
+DOCSIFER_BACKEND = "http://localhost:7860/v1/convert"
 
-from .service import DocsiferService
-from .analytics import Analytics
-
-logger = logging.getLogger(__name__)
-router = APIRouter(tags=["v1"], responses={404: {"description": "Not found"}})
-
-# Initialize analytics (aggregated under "docsifer")
-analytics = Analytics(
-    url=os.environ.get("REDIS_URL", "redis://localhost:6379/0"),
-    token=os.environ.get("REDIS_TOKEN", "***"),
-    sync_interval=30 * 60,  # e.g. 30 minutes
+app = FastAPI(
+    title="URL to Markdown API",
+    description="Paste any webpage URL and get clean Markdown instantly.",
+    version="2.0.0"
 )
 
-# Initialize the Docsifer service (using "gpt-4o" for token counting)
-docsifer_service = DocsiferService(model_name="gpt-4o")
+class URLRequest(BaseModel):
+    url: HttpUrl
 
-
-class ConvertResponse(BaseModel):
-    filename: str
-    markdown: str
-
-
-@router.post("/convert", response_model=ConvertResponse)
-async def convert_document(
-    background_tasks: BackgroundTasks,
-    file: UploadFile = File(None, description="File to convert"),
-    url: str = Form(
-        None, description="URL to convert (used only if no file is provided)"
-    ),
-    openai: str = Form("{}", description="OpenAI config as a JSON object"),
-    http: str = Form("{}", description="HTTP config as a JSON object"),
-    settings: str = Form("{}", description="Settings as a JSON object"),
-):
-    """
-    Convert a file or an HTML page from a URL into Markdown.
-    If 'file' is provided, it takes priority over 'url'.
-
-    - 'openai' is a JSON string with keys such as {"api_key": "...", "base_url": "..."}.
-    - 'settings' is a JSON string with keys such as {"cleanup": bool}.
-    """
+def fetch_markdown_from_url(url: str) -> str:
+    """Contact backend to convert URL to Markdown."""
     try:
-        # Parse the JSON configuration parameters.
-        try:
-            openai_config = json.loads(openai) if openai else {}
-        except json.JSONDecodeError:
-            raise ValueError("Invalid JSON in 'openai' parameter.")
-
-        try:
-            http_config = json.loads(http) if http else {}
-        except json.JSONDecodeError:
-            raise ValueError("Invalid JSON in 'http' parameter.")
-
-        try:
-            settings_config = json.loads(settings) if settings else {}
-        except json.JSONDecodeError:
-            raise ValueError("Invalid JSON in 'settings' parameter.")
-
-        cleanup = settings_config.get("cleanup", True)
-
-        # If a file is provided, use it; otherwise, fetch the content from the URL.
-        if file is not None:
-            with tempfile.TemporaryDirectory() as tmpdir:
-                temp_path = Path(tmpdir) / file.filename
-                contents = await file.read()
-                temp_path.write_bytes(contents)
-                result, token_count = await docsifer_service.convert_file(
-                    source=str(temp_path),
-                    openai_config=openai_config,
-                    http_config=http_config,
-                    cleanup=cleanup,
-                )
-        elif url:
-            # async with aiohttp.ClientSession() as session:
-            #     async with session.get(url) as resp:
-            #         if resp.status != 200:
-            #             raise ValueError(f"Failed to fetch URL: status {resp.status}")
-            #         data = await resp.read()
-            # with tempfile.TemporaryDirectory() as tmpdir:
-            #     temp_path = Path(tmpdir) / f"{scuid()}.html"
-            #     temp_path.write_bytes(data)
-            #     result, token_count = await docsifer_service.convert_file(
-            #         source=str(temp_path),
-            #         openai_config=openai_config,
-            #         cleanup=cleanup,
-            #     )
-            result, token_count = await docsifer_service.convert_file(
-                source=str(url),
-                openai_config=openai_config,
-                http_config=http_config,
-                cleanup=cleanup,
-            )
-        else:
-            raise HTTPException(
-                status_code=400, detail="Provide either 'file' or 'url'."
-            )
-
-        # Record token usage in the background.
-        background_tasks.add_task(analytics.access, token_count)
-        return ConvertResponse(**result)
-
+        resp = requests.post(
+            DOCSIFER_BACKEND,
+            data={"url": url, "settings": '{"cleanup": true}'},
+            timeout=30
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        return data.get("markdown", "")
     except Exception as e:
-        msg = f"Failed to convert content. Error: {str(e)}"
-        logger.error(msg)
-        raise HTTPException(status_code=500, detail=msg)
+        raise RuntimeError(f"Conversion failed: {e}")
 
+@app.post("/convert", summary="Convert URL to Markdown")
+def convert_url(request: URLRequest):
+    """API endpoint: URL -> Markdown (and downloadable file)."""
+    markdown = fetch_markdown_from_url(str(request.url))
+    if not markdown.strip():
+        raise HTTPException(status_code=422, detail="No Markdown extracted from this URL.")
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".md", mode="w", encoding="utf-8") as tmp:
+        tmp.write(markdown)
+        md_path = tmp.name
+    return {"markdown": markdown, "md_file": md_path}
 
-@router.get("/stats")
-async def get_stats():
-    """
-    Return usage statistics (access, tokens) from the Analytics system.
-    """
+# Gradio Interface
+def gradio_url_to_md(url):
+    if not url:
+        return "Please enter a valid URL.", None
     try:
-        data = await analytics.stats()
-        return data
+        md = fetch_markdown_from_url(url)
+        if not md.strip():
+            return "No Markdown could be extracted. Try another URL.", None
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".md", mode="w", encoding="utf-8") as tmp:
+            tmp.write(md)
+            file_path = tmp.name
+        return md, file_path
     except Exception as e:
-        msg = f"Failed to fetch analytics stats: {str(e)}"
-        logger.error(msg)
-        raise HTTPException(status_code=500, detail=msg)
+        return f"Error: {e}", None
+
+with gr.Blocks(title="URL → Markdown") as demo:
+    gr.Markdown("""
+    # 🌐→📄 URL → Markdown Converter  
+    Paste a webpage URL below and get clean Markdown for documentation, blogs, or notes!
+    """)
+    url_input = gr.Textbox(label="Webpage URL", placeholder="https://example.com/article")
+    convert_btn = gr.Button("Convert")
+    md_output = gr.Textbox(label="Markdown Output", lines=18, show_copy_button=True)
+    file_output = gr.File(label="Download .md", interactive=False)
+    convert_btn.click(gradio_url_to_md, inputs=[url_input], outputs=[md_output, file_output])
+
+# Optionally mount Gradio to FastAPI
+from gradio.routes import mount_gradio_app
+mount_gradio_app(app, demo, path="/")
+
+# Clean up temp files on exit
+import atexit, glob
+def cleanup_temp_md():
+    for f in glob.glob("/tmp/tmp*.md"):
+        try:
+            os.remove(f)
+        except Exception:
+            pass
+atexit.register(cleanup_temp_md)
